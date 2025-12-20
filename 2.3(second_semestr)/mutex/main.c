@@ -105,5 +105,5 @@ int main() {
 
     cleanup_storage(&s);
     return SUCCESS;
-//как-то вынести в тест 1000/10000 итд 
+
 }
