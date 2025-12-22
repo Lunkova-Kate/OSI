@@ -16,8 +16,7 @@ int main()
 
 /* wget
 http://dl-cdn.alpinelinux.org/alpine/v3.18/releases/x86_64/alpine-standard-3.18.4-x86_64.iso
-wget -e use_proxy=yes -e
-http_proxy=http://dl-cdn.alpinelinux.org/alpine/v3.18/releases/x86_64/alpine-standard-3.18.4-x86_64.iso
+wget -e http_proxy=http://localhost:8080 http://dl-cdn.alpinelinux.org/alpine/v3.18/releases/x86_64/alpine-standard-3.18.4-x86_64.iso
  */
 
 /* /tmp/proxy_test

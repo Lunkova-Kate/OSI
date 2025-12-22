@@ -4,7 +4,7 @@
 
 static volatile int proxy_running = 1;
 static int server_socket_fd = -1;
-static pthread_mutex_t running_mutex;
+static pthread_mutex_t running_mutex =  PTHREAD_MUTEX_INITIALIZER;
 
 static void safe_write(const char *msg)
 {
@@ -174,8 +174,8 @@ void *handle_client(void *arg)
         return NULL;
     }
 
-    printf("[Thread %lu] Request: %s:%d\n", (unsigned long)pthread_self(), host,
-           port);
+     printf("[Thread %lu] Request: %s:%d\n", (unsigned long)pthread_self(), host,
+           port); 
 
     snprintf(port_str, sizeof(port_str), "%d", port);
 
@@ -184,14 +184,18 @@ void *handle_client(void *arg)
     hints.ai_socktype = SOCK_STREAM;
 
     int ret = getaddrinfo(host, port_str, &hints, &result);
+   
+    //printf("Im here");
     if (ret != 0)
     {
+       
         fprintf(stderr, "Error: getaddrinfo failed for %s: %s\n", host,
                 gai_strerror(ret));
         close(cli->client_socket);
         free(cli);
         return NULL;
     }
+
     int server_sock = -1;
     for (rp = result; rp != NULL; rp = rp->ai_next)
     {
@@ -199,16 +203,6 @@ void *handle_client(void *arg)
         if (server_sock < 0)
         {
             continue;
-        }
-
-        int server_sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_sock < 0)
-        {
-            perror("ERROR creating server socket");
-            freeaddrinfo(result);
-            close(cli->client_socket);
-            free(cli);
-            return NULL;
         }
 
         int flag = 1;
@@ -232,16 +226,17 @@ void *handle_client(void *arg)
         close(server_sock);
         server_sock = -1;
     }
-    if (server_sock < 0)
+
+    freeaddrinfo(result);
+    if ( server_sock < 0)
     {
         perror("ERROR connecting to remote server");
-        freeaddrinfo(result);
         close(cli->client_socket);
         free(cli);
         return NULL;
     }
 
-    freeaddrinfo(result);
+    
 
     char *ptr = buffer;
     ssize_t remaining = bytes_read;
@@ -262,11 +257,14 @@ void *handle_client(void *arg)
         }
         remaining -= sent;
         ptr += sent;
+        
     }
 
     ssize_t n;
+    ssize_t total_received = 0;
     while ((n = recv(server_sock, buffer, BUFFER_SIZE, 0)) > 0)
     {
+        
         char *resp_ptr = buffer;
         ssize_t resp_remaining = n;
 
@@ -329,57 +327,41 @@ int start_proxy_server(int port)
     {
         perror("WARNING: Could not set TCP_NODELAY on server socket");
     }
-    printf("HTTP Proxy started on port %d\n", port);
-    printf("Press Ctrl+C to stop...\n");
+     printf("HTTP Proxy started on port %d\n", port);
+    printf("Press Ctrl+C to stop...\n"); 
 
     struct sockaddr_in client_address;
     socklen_t client_addr_len = sizeof(client_address);
     int client_sock;
 
-    while (proxy_running)
+     while (1)
     {
-        client_sock =
-            accept(server_socket_fd, (struct sockaddr *)&client_address,
-                   &client_addr_len);
+        client_sock = accept(server_socket_fd, (struct sockaddr *)&client_address, &client_addr_len);
         if (client_sock < 0)
         {
-            int saved_errno = errno;
-
             pthread_mutex_lock(&running_mutex);
             int still_running = proxy_running;
             pthread_mutex_unlock(&running_mutex);
-
+            
             if (!still_running)
             {
                 break;
             }
-
-            if (saved_errno == EINTR)
+            
+            if (errno == EINTR)
             {
-                pthread_mutex_lock(&running_mutex);
-                still_running = proxy_running;
-                pthread_mutex_unlock(&running_mutex);
-
-                if (still_running)
-                {
-                    continue;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            else
-            {
-                perror("ERROR on accept");
                 continue;
             }
+            
+            perror("ERROR on accept");
+            continue;
         }
+
 
         pthread_mutex_lock(&running_mutex);
         int still_running = proxy_running;
         pthread_mutex_unlock(&running_mutex);
-
+        
         if (!still_running)
         {
             close(client_sock);
@@ -388,7 +370,7 @@ int start_proxy_server(int port)
 
         printf("New connection from %s:%d\n",
                inet_ntoa(client_address.sin_addr),
-               ntohs(client_address.sin_port));
+               ntohs(client_address.sin_port)); 
 
         client_dt *cli = (client_dt *)malloc(sizeof(client_dt));
         if (!cli)
@@ -423,12 +405,14 @@ int start_proxy_server(int port)
 
 void stop_proxy_server()
 {
+    pthread_mutex_lock(&running_mutex);
     proxy_running = 0;
-
+    pthread_mutex_unlock(&running_mutex);
     if (server_socket_fd >= 0)
     {
         shutdown(server_socket_fd, SHUT_RDWR);
         close(server_socket_fd);
         server_socket_fd = -1;
+        sleep(2);
     }
 }
