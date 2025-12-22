@@ -48,8 +48,9 @@ int add_node(Storage* s, const char* str) {
 void cleanup_storage(Storage* s) {
     pthread_mutex_lock(&s->head_lock);
     Node* current_node = s->first;
-    pthread_mutex_unlock(&s->head_lock);
+    
     s->first = NULL;
+    pthread_mutex_unlock(&s->head_lock);
     while (current_node) {
         Node* next = current_node->next;
         pthread_mutex_destroy(&current_node->lock);
@@ -57,4 +58,20 @@ void cleanup_storage(Storage* s) {
         current_node = next;
     }
     pthread_mutex_destroy(&s->head_lock);
+}
+
+char* generate_random_string(int max_len) {
+      char* str = malloc(max_len + 1);
+    if (!str){
+        fprintf(stderr, "Error: malloc for create str\n");
+        return NULL;
+    }
+    int len = (rand() % max_len) + 1;
+
+     for (int i = 0; i < len; i++) {
+        str[i] = 'A' + (rand() % 52);
+    }
+    str[len] = '\0';
+    
+    return str;
 }

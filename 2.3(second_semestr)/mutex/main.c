@@ -4,7 +4,7 @@
 #include "Node.h"
 #include "Utils.h"
 #include "Thread_readers.h"
-#include "Thread_swapers.h"
+#include "Thread_swappers.h"
 
 atomic_int iter_inc = 0, pairs_inc = 0;
 atomic_int iter_dec = 0, pairs_dec = 0;
@@ -13,28 +13,49 @@ atomic_int iter_eq  = 0, pairs_eq  = 0;
 atomic_int running = 1;
 atomic_int swap_count = 0;
 
+int create_list_of_size(Storage* s, int node_size, int max_str_len) {
 
+    for (int i = 0; i < node_size; i++) {
+        char* random_str = generate_random_string(max_str_len);
+        if (!random_str) {
+            fprintf(stderr, "Failed to generate string\n");
+            return FAILED;
+        }
+        if (add_node(s, random_str) != SUCCESS) {
+            fprintf(stderr, "Error adding Node #%d\n", i);
+            free(random_str);
+            return FAILED;
+        }
+        
+        free(random_str);
 
-int main() {
-    Storage s = {0};
+    }
+    return SUCCESS;
+}
+
+void test(int node_size, int test_duration_sec) {
+    printf("\n TESTING NODE SIZE: %d \n", node_size);
+    Storage s;
+    s.first = NULL;
 
     if (pthread_mutex_init(&s.head_lock, NULL) != 0) {
-        fprintf(stderr, "Error: mutex for create head_lock\n");
-        return FAILED;
+        fprintf(stderr, "Error: mutex init failed\n");
+        return;
     }
-    s.first = NULL;
-    srand(time(NULL));
-    const char* words[] = {"aqw", "b", "csdsdghcc","b" , "fdfd", "ee", "fffgrggg", "g", "hhhhhhh"};
-    int word_count = sizeof(words) / sizeof(words[0]);
-    for (int i = 0; i < 100; i++) {
-        const char* word = words[rand() % word_count];
-        if (add_node(&s, word) != SUCCESS) {
-        fprintf(stderr, "Error for add Node #%d\n", i);
-        cleanup_storage(&s);
-        return FAILED;
-        }
+
+    if (create_list_of_size(&s, node_size, 50) != SUCCESS) {
+        fprintf(stderr, "Failed to create list\n");
+        pthread_mutex_destroy(&s.head_lock);
+        return;
     }
-    printf("IM CREATE LIST\n");
+
+    atomic_store(&iter_inc, 0);
+    atomic_store(&pairs_inc, 0);
+    atomic_store(&iter_dec, 0);
+    atomic_store(&pairs_dec, 0);
+    atomic_store(&iter_eq, 0);
+    atomic_store(&pairs_eq, 0);
+    atomic_store(&swap_count, 0);
 
     ThreadArgs args[3] = {
         { &s, is_increasing, &iter_inc, &pairs_inc },
@@ -43,67 +64,63 @@ int main() {
     };
 
     pthread_t readers[3], modifiers[3];
-    int created_threads = 0;
-    int err = 0;
 
+    int err = 0;
      for (int i = 0; i < 3; i++) {
         err = pthread_create(&readers[i], NULL, generic_thread, &args[i]);
         if (err != 0) {
-            fprintf(stderr, "Error pthread_create (reader %d): %s\n", i, strerror(err));
-            running = 0;
-            for (int j = 0; j < i; j++) {
-                pthread_join(readers[j], NULL);
-            }
+            fprintf(stderr, "Error creating reader %d: %s\n", i, strerror(err));
             cleanup_storage(&s);
-            return FAILED;
+            return;
         }
-        created_threads++;
     }
-
-    for (int i = 0; i < 3; i++) {
+for (int i = 0; i < 3; i++) {
     err = pthread_create(&modifiers[i], NULL, check_swap, &s);
-
     if (err != 0) {
-        fprintf(stderr, "Error pthread_create (modifier): %s\n", strerror(err));
-        running = 0;
-        for (int i = 0; i < created_threads; i++) {
-            pthread_join(readers[i], NULL);
+        fprintf(stderr, "Error creating modifier %d: %s\n", i, strerror(err));
+        atomic_store(&running, 0);
+        for (int j = 0; j < i; j++) {
+            pthread_join(modifiers[j], NULL);
+        }
+        for (int j = 0; j < 3; j++) {
+            pthread_join(readers[j], NULL);
         }
         cleanup_storage(&s);
-        return FAILED;
+        return;
     }
+}
+    sleep(test_duration_sec);
+    atomic_store(&running, 0);
+    for (int i = 0; i < 3; i++) {
+        pthread_join(readers[i], NULL);
+        pthread_join(modifiers[i], NULL);
     }
 
-    //завершаемся
-    sleep(3);
-    running = 0; 
-
-    for (int i = 0; i < 3; i++) {
-        err = pthread_join(readers[i], NULL);
-        if (err != 0) {
-            fprintf(stderr, "Error: pthread_join(reader %d) вернул %s\n", i, strerror(err));
-        }
-    }
-    for (int i = 0; i < 3; i++) {
-    err = pthread_join(modifiers[i], NULL);
-        if (err != 0) {
-            fprintf(stderr, "Error: pthread_join(modifier) вернул %s\n", strerror(err));
-        }
-    }
     printf("Возрастающих пар:   %d (итераций: %d)\n", (int)pairs_inc, (int)iter_inc);
     printf("Убывающих пар:     %d (итераций: %d)\n", (int)pairs_dec, (int)iter_dec);
     printf("Равных пар:        %d (итераций: %d)\n", (int)pairs_eq,  (int)iter_eq);
     printf("Перестановок:      %d\n", (int)swap_count);
 
-    Node* cur = s.first;
-    while (cur) {
-        printf("[%s] → ", cur->value);
-        cur = cur->next;
-    }
-    printf("NULL\n"); 
-
-
     cleanup_storage(&s);
-    return SUCCESS;
+    atomic_store(&running, 1);
+}
 
+int main() {
+    
+    srand(time(NULL));
+    
+    int test_sizes[] = {10, 100, 1000};
+    int num_tests = sizeof(test_sizes) / sizeof(test_sizes[0]);
+
+    for (int i = 0; i < num_tests; i++) {
+        int size = test_sizes[i];
+        int test_duration = (size <= 1000) ? 5 : 3;
+        test(size, test_duration);
+
+        if (i < num_tests - 1) {
+            sleep(1);
+        }
+    }
+
+        return SUCCESS;
 }
