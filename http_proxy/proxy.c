@@ -140,27 +140,45 @@ void *handle_client(void *arg)
     client_dt *cli = (client_dt *)arg;
     char buffer[BUFFER_SIZE];
     char port_str[16];
+    ssize_t bytes_read = 0; 
 
-    memset(buffer, 0, BUFFER_SIZE);
-
-    ssize_t bytes_read = recv(cli->client_socket, buffer, BUFFER_SIZE - 1, 0);
-    if (bytes_read > 0)
-    {
-        buffer[bytes_read] = '\0';
-    }
-    else if (bytes_read <= 0)
-    {
-        if (bytes_read == -1 && errno == EINTR)
-        {
-            printf("recv interrupted by signal\n");
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+        bytes_read = recv(cli->client_socket, buffer, BUFFER_SIZE - 1, 0);
+        
+        if (bytes_read > 0) {
+            buffer[bytes_read] = '\0';
+            break;
         }
-        else
-        {
-            perror("ERROR in recv");
+        else if (bytes_read == 0) {
+            printf("[Thread %lu] Connection closed by client\n", 
+                   (unsigned long)pthread_self());
+            close(cli->client_socket);
+            free(cli);
+            return NULL;
         }
-        close(cli->client_socket);
-        free(cli);
-        return NULL;
+        else { 
+            if (errno == EINTR) {
+                pthread_mutex_lock(&running_mutex);
+                int should_stop = (proxy_running == 0);
+                pthread_mutex_unlock(&running_mutex);
+                
+                if (should_stop) {
+                    printf("[Thread %lu] Shutdown requested, closing connection\n",
+                           (unsigned long)pthread_self());
+                    close(cli->client_socket);
+                    free(cli);
+                    return NULL;
+                }
+                continue; 
+            }
+            else {
+                perror(" error recv");
+                close(cli->client_socket);
+                free(cli);
+                return NULL;
+            }
+        }
     }
 
     char host[256];
@@ -174,8 +192,7 @@ void *handle_client(void *arg)
         return NULL;
     }
 
-     printf("[Thread %lu] Request: %s:%d\n", (unsigned long)pthread_self(), host,
-           port); 
+    printf("[Thread %lu] Request: %s:%d\n", (unsigned long)pthread_self(), host, port); 
 
     snprintf(port_str, sizeof(port_str), "%d", port);
 
@@ -185,10 +202,8 @@ void *handle_client(void *arg)
 
     int ret = getaddrinfo(host, port_str, &hints, &result);
    
-    //printf("Im here");
     if (ret != 0)
     {
-       
         fprintf(stderr, "Error: getaddrinfo failed for %s: %s\n", host,
                 gai_strerror(ret));
         close(cli->client_socket);
@@ -228,15 +243,13 @@ void *handle_client(void *arg)
     }
 
     freeaddrinfo(result);
-    if ( server_sock < 0)
+    if (server_sock < 0)
     {
         perror("ERROR connecting to remote server");
         close(cli->client_socket);
         free(cli);
         return NULL;
     }
-
-    
 
     char *ptr = buffer;
     ssize_t remaining = bytes_read;
@@ -247,9 +260,19 @@ void *handle_client(void *arg)
         {
             if (errno == EINTR)
             {
+                pthread_mutex_lock(&running_mutex);
+                int should_stop = (proxy_running == 0);
+                pthread_mutex_unlock(&running_mutex);
+                
+                if (should_stop) {
+                    close(server_sock);
+                    close(cli->client_socket);
+                    free(cli);
+                    return NULL;
+                }
                 continue;
             }
-            perror("ERROR sending to server");
+            perror("ERROR sending to server");  
             close(server_sock);
             close(cli->client_socket);
             free(cli);
@@ -257,25 +280,29 @@ void *handle_client(void *arg)
         }
         remaining -= sent;
         ptr += sent;
-        
     }
 
     ssize_t n;
     ssize_t total_received = 0;
     while ((n = recv(server_sock, buffer, BUFFER_SIZE, 0)) > 0)
     {
-        
         char *resp_ptr = buffer;
         ssize_t resp_remaining = n;
 
         while (resp_remaining > 0)
         {
-            ssize_t sent =
-                send(cli->client_socket, resp_ptr, resp_remaining, 0);
+            ssize_t sent = send(cli->client_socket, resp_ptr, resp_remaining, 0);
             if (sent < 0)
             {
                 if (errno == EINTR)
                 {
+                    pthread_mutex_lock(&running_mutex);
+                    int should_stop = (proxy_running == 0);
+                    pthread_mutex_unlock(&running_mutex);
+                    
+                    if (should_stop) {
+                        break;  
+                    }
                     continue;
                 }
                 perror("ERROR sending to client");
@@ -327,7 +354,7 @@ int start_proxy_server(int port)
     {
         perror("WARNING: Could not set TCP_NODELAY on server socket");
     }
-     printf("HTTP Proxy started on port %d\n", port);
+    printf("HTTP Proxy started on port %d\n", port);
     printf("Press Ctrl+C to stop...\n"); 
 
     struct sockaddr_in client_address;
