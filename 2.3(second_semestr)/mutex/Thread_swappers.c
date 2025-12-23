@@ -18,11 +18,7 @@ bool swap_first_two(Storage* s) {
     pthread_mutex_lock(&A->lock);
     pthread_mutex_lock(&B->lock);
     
-
-    pthread_mutex_unlock(&s->head_lock);
-    
-
-    bool need_swap = (strlen(A->value) > strlen(B->value));
+    bool need_swap =  (strlen(A->value) > strlen(B->value)) || (rand() % 4 == 0);
     
     if (need_swap) {
         s->first = B;
@@ -32,7 +28,8 @@ bool swap_first_two(Storage* s) {
     
     pthread_mutex_unlock(&B->lock);
     pthread_mutex_unlock(&A->lock);
-    
+    pthread_mutex_unlock(&s->head_lock);
+
     return need_swap;
 }
 

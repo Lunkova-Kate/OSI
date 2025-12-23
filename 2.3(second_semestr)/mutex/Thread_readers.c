@@ -25,12 +25,12 @@ int count_pairs(Storage* storage, bool(*predicate)(int len1, int len2)) {
     
 
     Node* node1 = current_node;
-    
+    pthread_mutex_lock(&node1->lock);
+    pthread_mutex_unlock(&storage->head_lock);
+
     while (node1 && node1->next) {
         Node* node2 = node1->next;
         
-
-        pthread_mutex_lock(&node1->lock);
         pthread_mutex_lock(&node2->lock);
         
 
@@ -40,16 +40,13 @@ int count_pairs(Storage* storage, bool(*predicate)(int len1, int len2)) {
         if (predicate(len1, len2)) {
             count++;
         }
-        
-
-        pthread_mutex_unlock(&node2->lock);
+    
         pthread_mutex_unlock(&node1->lock);
-        
-
+    
         node1 = node2;  
     }
     
-    pthread_mutex_unlock(&storage->head_lock);
+    pthread_mutex_unlock(&node1->lock);
     
     return count;
 }

@@ -18,7 +18,7 @@ Node* create_node(const char* str) {
     node->next = NULL;
     //node->ref_count = 1;
 
-    if (pthread_mutex_init(&node->lock, NULL) != 0) {
+    if (pthread_spin_init(&node->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
         fprintf(stderr, "Error: mutex for create Node\n");
         free(node);
         return NULL;
@@ -31,7 +31,7 @@ int add_node(Storage* s, const char* str) {
     Node* node = create_node(str);
     if (!node) return FAILED;
 
-    pthread_mutex_lock(&s->head_lock);
+    pthread_spin_lock(&s->head_lock);
     if (!s->first) {
         s->first = node;
     } else {
@@ -41,23 +41,23 @@ int add_node(Storage* s, const char* str) {
         }
         cur->next = node;
     }
-    pthread_mutex_unlock(&s->head_lock);
+    pthread_spin_unlock(&s->head_lock);
     return SUCCESS;
 }
 
 void cleanup_storage(Storage* s) {
-    pthread_mutex_lock(&s->head_lock);
+    pthread_spin_lock(&s->head_lock);
     Node* current_node = s->first;
     
     s->first = NULL;
-    pthread_mutex_unlock(&s->head_lock);
+    pthread_spin_unlock(&s->head_lock); //!
     while (current_node) {
         Node* next = current_node->next;
-        pthread_mutex_destroy(&current_node->lock);
+        pthread_spin_destroy(&current_node->lock);
         free(current_node);
         current_node = next;
     }
-    pthread_mutex_destroy(&s->head_lock);
+    pthread_spin_destroy(&s->head_lock);
 }
 
 char* generate_random_string(int max_len) {
