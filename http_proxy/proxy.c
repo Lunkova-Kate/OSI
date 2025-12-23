@@ -4,7 +4,7 @@
 
 static volatile int proxy_running = 1;
 static int server_socket_fd = -1;
-static pthread_mutex_t running_mutex =  PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t running_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void safe_write(const char *msg)
 {
@@ -140,39 +140,47 @@ void *handle_client(void *arg)
     client_dt *cli = (client_dt *)arg;
     char buffer[BUFFER_SIZE];
     char port_str[16];
-    ssize_t bytes_read = 0; 
+    ssize_t bytes_read = 0;
 
-    while (1) {
+    while (1)
+    {
         memset(buffer, 0, BUFFER_SIZE);
         bytes_read = recv(cli->client_socket, buffer, BUFFER_SIZE - 1, 0);
-        
-        if (bytes_read > 0) {
+
+        if (bytes_read > 0)
+        {
             buffer[bytes_read] = '\0';
             break;
         }
-        else if (bytes_read == 0) {
-            printf("[Thread %lu] Connection closed by client\n", 
+        else if (bytes_read == 0)
+        {
+            printf("[Thread %lu] Connection closed by client\n",
                    (unsigned long)pthread_self());
             close(cli->client_socket);
             free(cli);
             return NULL;
         }
-        else { 
-            if (errno == EINTR) {
+        else
+        {
+            if (errno == EINTR)
+            {
                 pthread_mutex_lock(&running_mutex);
                 int should_stop = (proxy_running == 0);
                 pthread_mutex_unlock(&running_mutex);
-                
-                if (should_stop) {
-                    printf("[Thread %lu] Shutdown requested, closing connection\n",
-                           (unsigned long)pthread_self());
+
+                if (should_stop)
+                {
+                    printf(
+                        "[Thread %lu] Shutdown requested, closing connection\n",
+                        (unsigned long)pthread_self());
                     close(cli->client_socket);
                     free(cli);
                     return NULL;
                 }
-                continue; 
+                continue;
             }
-            else {
+            else
+            {
                 perror(" error recv");
                 close(cli->client_socket);
                 free(cli);
@@ -192,7 +200,8 @@ void *handle_client(void *arg)
         return NULL;
     }
 
-    printf("[Thread %lu] Request: %s:%d\n", (unsigned long)pthread_self(), host, port); 
+    printf("[Thread %lu] Request: %s:%d\n", (unsigned long)pthread_self(), host,
+           port);
 
     snprintf(port_str, sizeof(port_str), "%d", port);
 
@@ -201,7 +210,7 @@ void *handle_client(void *arg)
     hints.ai_socktype = SOCK_STREAM;
 
     int ret = getaddrinfo(host, port_str, &hints, &result);
-   
+
     if (ret != 0)
     {
         fprintf(stderr, "Error: getaddrinfo failed for %s: %s\n", host,
@@ -263,8 +272,9 @@ void *handle_client(void *arg)
                 pthread_mutex_lock(&running_mutex);
                 int should_stop = (proxy_running == 0);
                 pthread_mutex_unlock(&running_mutex);
-                
-                if (should_stop) {
+
+                if (should_stop)
+                {
                     close(server_sock);
                     close(cli->client_socket);
                     free(cli);
@@ -272,7 +282,7 @@ void *handle_client(void *arg)
                 }
                 continue;
             }
-            perror("ERROR sending to server");  
+            perror("ERROR sending to server");
             close(server_sock);
             close(cli->client_socket);
             free(cli);
@@ -291,7 +301,8 @@ void *handle_client(void *arg)
 
         while (resp_remaining > 0)
         {
-            ssize_t sent = send(cli->client_socket, resp_ptr, resp_remaining, 0);
+            ssize_t sent =
+                send(cli->client_socket, resp_ptr, resp_remaining, 0);
             if (sent < 0)
             {
                 if (errno == EINTR)
@@ -299,9 +310,10 @@ void *handle_client(void *arg)
                     pthread_mutex_lock(&running_mutex);
                     int should_stop = (proxy_running == 0);
                     pthread_mutex_unlock(&running_mutex);
-                    
-                    if (should_stop) {
-                        break;  
+
+                    if (should_stop)
+                    {
+                        break;
                     }
                     continue;
                 }
@@ -355,40 +367,41 @@ int start_proxy_server(int port)
         perror("WARNING: Could not set TCP_NODELAY on server socket");
     }
     printf("HTTP Proxy started on port %d\n", port);
-    printf("Press Ctrl+C to stop...\n"); 
+    printf("Press Ctrl+C to stop...\n");
 
     struct sockaddr_in client_address;
     socklen_t client_addr_len = sizeof(client_address);
     int client_sock;
 
-     while (1)
+    while (1)
     {
-        client_sock = accept(server_socket_fd, (struct sockaddr *)&client_address, &client_addr_len);
+        client_sock =
+            accept(server_socket_fd, (struct sockaddr *)&client_address,
+                   &client_addr_len);
         if (client_sock < 0)
         {
             pthread_mutex_lock(&running_mutex);
             int still_running = proxy_running;
             pthread_mutex_unlock(&running_mutex);
-            
+
             if (!still_running)
             {
                 break;
             }
-            
+
             if (errno == EINTR)
             {
                 continue;
             }
-            
+
             perror("ERROR on accept");
             continue;
         }
 
-
         pthread_mutex_lock(&running_mutex);
         int still_running = proxy_running;
         pthread_mutex_unlock(&running_mutex);
-        
+
         if (!still_running)
         {
             close(client_sock);
@@ -397,7 +410,7 @@ int start_proxy_server(int port)
 
         printf("New connection from %s:%d\n",
                inet_ntoa(client_address.sin_addr),
-               ntohs(client_address.sin_port)); 
+               ntohs(client_address.sin_port));
 
         client_dt *cli = (client_dt *)malloc(sizeof(client_dt));
         if (!cli)
