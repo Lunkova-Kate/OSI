@@ -38,14 +38,14 @@ void test(int node_size, int test_duration_sec) {
     Storage s;
     s.first = NULL;
 
-    if (pthread_mutex_init(&s.head_lock, NULL) != 0) {
+    if (pthread_rwlock_init(&s.head_lock, NULL) != 0)  {
         fprintf(stderr, "Error: mutex init failed\n");
         return;
     }
 
     if (create_list_of_size(&s, node_size, 50) != SUCCESS) {
         fprintf(stderr, "Failed to create list\n");
-        pthread_mutex_destroy(&s.head_lock);
+        pthread_rwlock_destroy(&s.head_lock);
         return;
     }
 
@@ -109,7 +109,7 @@ int main() {
     
     srand(time(NULL));
     
-    int test_sizes[] = {10, 100, 1000};
+    int test_sizes[] = {100, 1000, 10000, 100000};
     int num_tests = sizeof(test_sizes) / sizeof(test_sizes[0]);
 
     for (int i = 0; i < num_tests; i++) {

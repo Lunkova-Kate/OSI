@@ -4,19 +4,19 @@
 bool swap_first_two(Storage* s) {
     if (!s) return false;
     
-    pthread_mutex_lock(&s->head_lock);
+    pthread_rwlock_wrlock(&s->head_lock); 
     
     Node* A = s->first;
     if (!A || !A->next) {
-        pthread_mutex_unlock(&s->head_lock);
+        pthread_rwlock_unlock(&s->head_lock);
         return false;
     }
     
     Node* B = A->next;
     
 
-    pthread_mutex_lock(&A->lock);
-    pthread_mutex_lock(&B->lock);
+    pthread_rwlock_wrlock(&A->rwlock);  
+    pthread_rwlock_wrlock(&B->rwlock);
     
     bool need_swap =  (strlen(A->value) > strlen(B->value)) || (rand() % 4 == 0);
     
@@ -26,9 +26,9 @@ bool swap_first_two(Storage* s) {
         B->next = A;
     }
     
-    pthread_mutex_unlock(&B->lock);
-    pthread_mutex_unlock(&A->lock);
-    pthread_mutex_unlock(&s->head_lock);
+    pthread_rwlock_unlock(&B->rwlock); 
+    pthread_rwlock_unlock(&A->rwlock);  
+    pthread_rwlock_unlock(&s->head_lock);
 
     return need_swap;
 }

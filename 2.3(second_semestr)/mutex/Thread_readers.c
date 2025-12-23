@@ -45,9 +45,9 @@ int count_pairs(Storage* storage, bool(*predicate)(int len1, int len2)) {
     
         node1 = node2;  
     }
-    
-    pthread_mutex_unlock(&node1->lock);
-    
+    if (node1) {
+        pthread_mutex_unlock(&node1->lock);
+    }
     return count;
 }
 

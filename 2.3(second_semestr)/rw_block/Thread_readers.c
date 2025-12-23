@@ -14,24 +14,24 @@ bool is_equal_len(int len1, int len2) {
 int count_pairs(Storage* storage, bool(*predicate)(int len1, int len2)) {
     int count = 0;
     
-    pthread_mutex_lock(&storage->head_lock);
+    pthread_rwlock_rdlock(&storage->head_lock);
     Node* current_node = storage->first;
     
 
     if (!current_node || !current_node->next) {
-        pthread_mutex_unlock(&storage->head_lock);
+        pthread_rwlock_unlock(&storage->head_lock);
         return SUCCESS;
     }
     
 
     Node* node1 = current_node;
-    pthread_mutex_lock(&node1->lock);
-    pthread_mutex_unlock(&storage->head_lock);
+    pthread_rwlock_rdlock(&node1->rwlock);
+    pthread_rwlock_unlock(&storage->head_lock);
 
     while (node1 && node1->next) {
         Node* node2 = node1->next;
         
-        pthread_mutex_lock(&node2->lock);
+        pthread_rwlock_rdlock(&node2->rwlock);
         
 
         int len1 = strlen(node1->value);
@@ -41,12 +41,14 @@ int count_pairs(Storage* storage, bool(*predicate)(int len1, int len2)) {
             count++;
         }
     
-        pthread_mutex_unlock(&node1->lock);
+         pthread_rwlock_unlock(&node1->rwlock);
     
         node1 = node2;  
     }
     
-    pthread_mutex_unlock(&node1->lock);
+    if (node1) {
+        pthread_rwlock_unlock(&node1->rwlock);
+    }
     
     return count;
 }

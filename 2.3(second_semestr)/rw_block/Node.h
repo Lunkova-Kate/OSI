@@ -15,7 +15,7 @@ pthread_rwlock_t rwlock;
 
 typedef struct _Storage {
 Node *first;
-pthread_mutex_t head_lock; 
+pthread_rwlock_t head_lock; 
 } Storage;
 
 typedef struct {

@@ -109,7 +109,7 @@ int main() {
     
     srand(time(NULL));
     
-    int test_sizes[] = {10, 100, 1000};
+    int test_sizes[] = {100, 1000, 10000, 100000};
     int num_tests = sizeof(test_sizes) / sizeof(test_sizes[0]);
 
     for (int i = 0; i < num_tests; i++) {

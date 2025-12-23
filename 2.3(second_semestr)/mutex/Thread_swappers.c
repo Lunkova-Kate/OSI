@@ -14,6 +14,7 @@ bool swap_first_two(Storage* s) {
     
     Node* B = A->next;
     
+    
 
     pthread_mutex_lock(&A->lock);
     pthread_mutex_lock(&B->lock);
