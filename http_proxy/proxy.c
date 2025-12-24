@@ -450,7 +450,7 @@ void stop_proxy_server()
     pthread_mutex_unlock(&running_mutex);
     if (server_socket_fd >= 0)
     {
-        shutdown(server_socket_fd, SHUT_RDWR);
+        //shutdown(server_socket_fd, SHUT_RDWR);
         close(server_socket_fd);
         server_socket_fd = -1;
         sleep(2);
