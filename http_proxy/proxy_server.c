@@ -142,7 +142,6 @@ void stop_proxy_server(void)
     
     if (server_socket_fd >= 0)
     {
-        shutdown(server_socket_fd, SHUT_RDWR);
         close(server_socket_fd);
         server_socket_fd = -1;
     }
